@@ -1,0 +1,8 @@
+# Store text files with LF and check them out with LF, so files bind-mounted
+# into the Linux containers behave identically on every machine. Without this,
+# Windows checkouts produce CRLF and shell scripts fail inside the containers.
+* text=auto eol=lf
+
+# Windows-only scripts genuinely need CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
