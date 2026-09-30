@@ -1,31 +1,30 @@
-import { useState, type FormEvent } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { Link, Navigate } from 'react-router-dom'
+import { useState, type FormEvent } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Link, Navigate } from "react-router-dom";
 
-import { useAuth } from './useAuth'
+import { useAuth } from "./useAuth";
 
 export function LoginPage() {
-  const { user, login } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const { user, login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const loginMutation = useMutation({
     mutationFn: () => login(email, password),
-  })
+  });
 
   function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    loginMutation.mutate()
+    event.preventDefault();
+    loginMutation.mutate();
   }
 
   if (user !== null) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/" replace />;
   }
 
   return (
     <main className="card">
       <h1>Sign in</h1>
-
       <form onSubmit={handleSubmit}>
         <label htmlFor="email">Email</label>
         <input
@@ -48,7 +47,7 @@ export function LoginPage() {
         />
 
         <button type="submit" disabled={loginMutation.isPending}>
-          {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
+          {loginMutation.isPending ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
@@ -62,5 +61,5 @@ export function LoginPage() {
         No account yet? <Link to="/register">Create one</Link>
       </p>
     </main>
-  )
+  );
 }

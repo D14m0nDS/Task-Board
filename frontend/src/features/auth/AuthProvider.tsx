@@ -2,7 +2,11 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { ApiError } from '../../lib/api'
-import { fetchCurrentUser, login as requestLogin } from './api'
+import {
+  fetchCurrentUser,
+  login as requestLogin,
+  register as requestRegister,
+} from './api'
 import { AuthContext, type AuthContextValue } from './authContext'
 import { clearToken, readToken, writeToken } from './token'
 
@@ -37,6 +41,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(accessToken)
   }, [])
 
+  // Registration does not return a token, so the new account is signed in
+  // through the normal login path rather than a second code path.
+  const register = useCallback(
+    async (email: string, fullName: string, password: string) => {
+      await requestRegister(email, fullName, password)
+      await login(email, password)
+    },
+    [login],
+  )
+
   const logout = useCallback(() => {
     clearToken()
     setToken(null)
@@ -48,9 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: user ?? null,
       isLoading: token !== null && isLoading,
       login,
+      register,
       logout,
     }),
-    [user, token, isLoading, login, logout],
+    [user, token, isLoading, login, register, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
