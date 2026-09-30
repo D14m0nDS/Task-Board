@@ -17,11 +17,14 @@ config = context.config
 
 # The connection string comes from the application settings instead of
 # alembic.ini, so there is a single source of truth and no credentials in the
-# repository. Percent signs are escaped because ConfigParser interpolates them.
-config.set_main_option(
-    "sqlalchemy.url",
-    get_settings().database_url.replace("%", "%%"),
-)
+# repository. A caller that sets the URL explicitly (tests, one-off scripts)
+# wins, which is the only way to migrate a database other than the configured
+# one. Percent signs are escaped because ConfigParser interpolates them.
+if not config.get_main_option("sqlalchemy.url", None):
+    config.set_main_option(
+        "sqlalchemy.url",
+        get_settings().database_url.replace("%", "%%"),
+    )
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
