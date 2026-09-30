@@ -55,6 +55,6 @@ in the root `.env`.
 ## Tests
 
 ```bash
-docker compose exec backend pytest    # backend
-cd frontend && npx tsc -b && npm run lint
+docker compose exec backend pytest                    # backend
+cd frontend && npm test && npx tsc -b && npm run lint  # frontend
 ```
