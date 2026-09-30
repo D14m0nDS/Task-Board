@@ -27,15 +27,34 @@ With the default `.env`:
 - API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
-Postgres and the backend run in Docker. The frontend is run locally
-(`cd frontend && npm run dev`) so hot reload stays fast.
-
 If ports 5432 or 8000 are already taken on your machine, change
 `POSTGRES_PORT` / `BACKEND_PORT` in `.env`. Only the published host ports
 change; nothing inside the containers is affected.
 
-## Backend tests
+Apply database migrations:
 
 ```bash
-docker compose exec backend pytest
+docker compose exec backend alembic upgrade head
+```
+
+## Frontend
+
+Postgres and the backend run in Docker; the frontend runs locally so hot
+reload stays fast.
+
+```bash
+cd frontend
+cp .env.example .env.local     # point VITE_API_URL at your BACKEND_PORT
+npm install
+npm run dev
+```
+
+Available at http://localhost:5173. The URL must be listed in `CORS_ORIGINS`
+in the root `.env`.
+
+## Tests
+
+```bash
+docker compose exec backend pytest    # backend
+cd frontend && npx tsc -b && npm run lint
 ```
