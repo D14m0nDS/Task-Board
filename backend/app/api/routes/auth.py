@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.core.security import create_access_token
 from app.models.user import User
 from app.schemas.token import Token
@@ -33,3 +33,8 @@ def login(payload: UserLogin, db: DbSession) -> Token:
         )
 
     return Token(access_token=create_access_token(str(user.id)))
+
+
+@router.get("/me", response_model=UserRead)
+def me(current_user: CurrentUser) -> User:
+    return current_user
