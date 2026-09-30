@@ -2,3 +2,4 @@
 # that have been registered on Base.metadata by an actual import.
 
 from app.models.user import User  # noqa: F401
+from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole  # noqa: F401
