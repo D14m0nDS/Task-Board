@@ -230,4 +230,6 @@ sketch
 .history
 .ionide
 
+# Local notes, not part of the published project
 AGENTS.md
+docs/PROGRESS.md
