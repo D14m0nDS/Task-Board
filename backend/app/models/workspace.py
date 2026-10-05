@@ -1,5 +1,6 @@
 import uuid
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -7,6 +8,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from app.db.mixins import TimestampMixin
 from app.models.user import User
+
+if TYPE_CHECKING:
+    # Project imports this module, so a runtime import would be circular.
+    # SQLAlchemy resolves the relationship by class name instead.
+    from app.models.project import Project
 
 
 class WorkspaceRole(StrEnum):
@@ -21,6 +27,10 @@ class Workspace(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120))
 
     members: Mapped[list["WorkspaceMember"]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
+    projects: Mapped[list["Project"]] = relationship(
         back_populates="workspace",
         cascade="all, delete-orphan",
     )
