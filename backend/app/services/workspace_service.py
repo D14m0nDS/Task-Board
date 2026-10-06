@@ -1,11 +1,29 @@
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate
+from app.services import user_service
+
+
+class UserNotFoundError(Exception):
+    """No account exists for the email given."""
+
+
+class AlreadyAMemberError(Exception):
+    """The user already belongs to the workspace."""
+
+
+class NotAMemberError(Exception):
+    """The user does not belong to the workspace."""
+
+
+class LastOwnerError(Exception):
+    """The change would leave the workspace with no owner."""
 
 
 def get_membership(
@@ -53,4 +71,75 @@ def update_workspace(db: Session, workspace: Workspace, payload: WorkspaceUpdate
 
 def delete_workspace(db: Session, workspace: Workspace) -> None:
     db.delete(workspace)
+    db.commit()
+
+
+def _reject_if_last_owner(db: Session, workspace_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    """Refuse a change that would strand the workspace with nobody to run it.
+
+    The owner rows are locked for the rest of the transaction, so two owners
+    cannot each observe the other and both step down.
+    """
+    statement = (
+        select(WorkspaceMember.user_id)
+        .where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.role == WorkspaceRole.OWNER,
+        )
+        .with_for_update()
+    )
+    owner_ids = list(db.scalars(statement))
+
+    if owner_ids == [user_id]:
+        raise LastOwnerError(user_id)
+
+
+def add_member(
+    db: Session, workspace: Workspace, email: str, role: WorkspaceRole
+) -> WorkspaceMember:
+    user = user_service.get_user_by_email(db, email)
+    if user is None:
+        raise UserNotFoundError(email)
+
+    if get_membership(db, workspace.id, user.id) is not None:
+        raise AlreadyAMemberError(email)
+
+    membership = WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role=role)
+    db.add(membership)
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # The composite primary key is the only real guard against two
+        # concurrent adds for the same user.
+        db.rollback()
+        raise AlreadyAMemberError(email) from exc
+
+    return membership
+
+
+def change_member_role(
+    db: Session, workspace: Workspace, user_id: uuid.UUID, role: WorkspaceRole
+) -> WorkspaceMember:
+    membership = get_membership(db, workspace.id, user_id)
+    if membership is None:
+        raise NotAMemberError(user_id)
+
+    if role != WorkspaceRole.OWNER:
+        _reject_if_last_owner(db, workspace.id, user_id)
+
+    membership.role = role
+    db.commit()
+
+    return membership
+
+
+def remove_member(db: Session, workspace: Workspace, user_id: uuid.UUID) -> None:
+    membership = get_membership(db, workspace.id, user_id)
+    if membership is None:
+        raise NotAMemberError(user_id)
+
+    _reject_if_last_owner(db, workspace.id, user_id)
+
+    db.delete(membership)
     db.commit()
