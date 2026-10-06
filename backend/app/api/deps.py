@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
 from app.models.user import User
-from app.services import user_service
+from app.models.workspace import WorkspaceMember, WorkspaceRole
+from app.services import user_service, workspace_service
 
 # auto_error=False so a missing header reaches our code and produces a 401;
 # the default behaviour would return 403, which is misleading here.
@@ -67,3 +68,44 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_workspace_membership(
+    workspace_id: uuid.UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> WorkspaceMember:
+    """Resolve the workspace in the path into the caller's membership.
+
+    A non-member gets 404 rather than 403, so the API never confirms that a
+    workspace exists to someone who has no business knowing.
+    """
+    membership = workspace_service.get_membership(db, workspace_id, current_user.id)
+    if membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found",
+        )
+
+    return membership
+
+
+WorkspaceMembership = Annotated[WorkspaceMember, Depends(get_workspace_membership)]
+
+
+def get_workspace_ownership(membership: WorkspaceMembership) -> WorkspaceMember:
+    """Same, but restricted to owners.
+
+    403 is right here: a member already knows the workspace exists, so the
+    only new information is that they lack the role.
+    """
+    if membership.role != WorkspaceRole.OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Requires the workspace owner role",
+        )
+
+    return membership
+
+
+WorkspaceOwnership = Annotated[WorkspaceMember, Depends(get_workspace_ownership)]
