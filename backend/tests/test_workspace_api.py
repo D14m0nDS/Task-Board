@@ -1,75 +1,12 @@
 import uuid
-from typing import NamedTuple
 
-import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.workspace import WorkspaceMember, WorkspaceRole
-
-PASSWORD = "workspace-tests-1"
-
-
-class Account(NamedTuple):
-    id: str
-    headers: dict[str, str]
-
-
-def make_account(client: TestClient, email: str) -> Account:
-    registration = client.post(
-        "/auth/register",
-        json={"email": email, "full_name": email.split("@")[0], "password": PASSWORD},
-    )
-    assert registration.status_code == status.HTTP_201_CREATED
-
-    login = client.post("/auth/login", json={"email": email, "password": PASSWORD})
-    token = login.json()["access_token"]
-
-    return Account(id=registration.json()["id"], headers={"Authorization": f"Bearer {token}"})
-
-
-@pytest.fixture
-def owner(client: TestClient) -> Account:
-    return make_account(client, "owner@example.com")
-
-
-@pytest.fixture
-def member(client: TestClient) -> Account:
-    return make_account(client, "member@example.com")
-
-
-@pytest.fixture
-def outsider(client: TestClient) -> Account:
-    return make_account(client, "outsider@example.com")
-
-
-@pytest.fixture
-def workspace(client: TestClient, owner: Account) -> dict:
-    response = client.post("/workspaces", json={"name": "Platform"}, headers=owner.headers)
-    assert response.status_code == status.HTTP_201_CREATED
-    return response.json()
-
-
-@pytest.fixture
-def shared_workspace(
-    client: TestClient, db: Session, workspace: dict, owner: Account, member: Account
-) -> dict:
-    """The workspace with a second user added as MEMBER.
-
-    Tests share one session across requests, unlike production, so expiring it
-    stops already-loaded relationships from serving a pre-insert view.
-    """
-    response = client.post(
-        f"/workspaces/{workspace['id']}/members",
-        json={"email": "member@example.com"},
-        headers=owner.headers,
-    )
-    assert response.status_code == status.HTTP_201_CREATED
-    db.expire_all()
-
-    return workspace
+from tests.conftest import Account
 
 
 class TestCreateWorkspace:
