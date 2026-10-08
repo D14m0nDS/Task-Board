@@ -1,5 +1,6 @@
 import uuid
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Enum, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -8,6 +9,9 @@ from app.db.base import Base
 from app.db.mixins import TimestampMixin
 from app.models.project import Project
 from app.models.user import User
+
+if TYPE_CHECKING:
+    from app.models.activity import TaskActivity
 
 
 class TaskStatus(StrEnum):
@@ -70,6 +74,10 @@ class Task(Base, TimestampMixin):
     project: Mapped[Project] = relationship(back_populates="tasks")
     reporter: Mapped[User] = relationship(foreign_keys=[reporter_id])
     assignee: Mapped[User | None] = relationship(foreign_keys=[assignee_id])
+    activities: Mapped[list["TaskActivity"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def key(self) -> str:
