@@ -204,3 +204,146 @@ class TestGetTask:
         response = client.get(f"{tasks_url}/{task['id']}", headers=outsider.headers)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def activity(client: TestClient, tasks_url: str, task_id: str, account: Account) -> list[dict]:
+    response = client.get(f"{tasks_url}/{task_id}/activity", headers=account.headers)
+    assert response.status_code == status.HTTP_200_OK
+    return response.json()
+
+
+class TestUpdateTask:
+    def test_lets_a_member_change_the_status(
+        self, client: TestClient, tasks_url: str, task: dict, member: Account
+    ) -> None:
+        response = client.patch(
+            f"{tasks_url}/{task['id']}",
+            json={"status": "IN_PROGRESS"},
+            headers=member.headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["status"] == "IN_PROGRESS"
+        assert response.json()["title"] == "Add login"
+
+    def test_records_a_status_change(
+        self, client: TestClient, tasks_url: str, task: dict, member: Account
+    ) -> None:
+        client.patch(
+            f"{tasks_url}/{task['id']}",
+            json={"status": "IN_PROGRESS"},
+            headers=member.headers,
+        )
+
+        change = activity(client, tasks_url, task["id"], member)[-1]
+        assert change["type"] == "STATUS_CHANGED"
+        assert change["source"] == "USER"
+        assert change["data"] == {"from": "BACKLOG", "to": "IN_PROGRESS"}
+        assert change["actor"]["id"] == member.id
+        assert "hashed_password" not in change["actor"]
+
+    def test_does_not_record_a_status_that_did_not_change(
+        self, client: TestClient, tasks_url: str, task: dict, member: Account
+    ) -> None:
+        client.patch(
+            f"{tasks_url}/{task['id']}", json={"status": "BACKLOG"}, headers=member.headers
+        )
+
+        types = [event["type"] for event in activity(client, tasks_url, task["id"], member)]
+        assert types == ["TASK_CREATED"]
+
+    def test_records_an_assignment_and_an_unassignment(
+        self, client: TestClient, tasks_url: str, task: dict, member: Account, owner: Account
+    ) -> None:
+        client.patch(
+            f"{tasks_url}/{task['id']}",
+            json={"assignee_id": owner.id},
+            headers=member.headers,
+        )
+        client.patch(
+            f"{tasks_url}/{task['id']}",
+            json={"assignee_id": None},
+            headers=owner.headers,
+        )
+
+        events = activity(client, tasks_url, task["id"], member)
+        assert events[-2]["type"] == "USER_ASSIGNED"
+        assert events[-2]["data"] == {"from": None, "to": owner.id}
+        assert events[-1]["data"] == {"from": owner.id, "to": None}
+
+    def test_leaves_an_omitted_description_alone(
+        self, client: TestClient, tasks_url: str, task: dict, member: Account
+    ) -> None:
+        url = f"{tasks_url}/{task['id']}"
+        client.patch(url, json={"description": "Notes"}, headers=member.headers)
+
+        response = client.patch(url, json={"title": "Renamed"}, headers=member.headers)
+
+        assert response.json()["description"] == "Notes"
+        assert response.json()["title"] == "Renamed"
+
+    def test_clears_the_description_when_null_is_sent(
+        self, client: TestClient, tasks_url: str, task: dict, member: Account
+    ) -> None:
+        url = f"{tasks_url}/{task['id']}"
+        client.patch(url, json={"description": "Notes"}, headers=member.headers)
+
+        response = client.patch(url, json={"description": None}, headers=member.headers)
+
+        assert response.json()["description"] is None
+
+    def test_rejects_an_assignee_from_outside_the_workspace(
+        self, client: TestClient, tasks_url: str, task: dict, member: Account, outsider: Account
+    ) -> None:
+        response = client.patch(
+            f"{tasks_url}/{task['id']}",
+            json={"assignee_id": outsider.id, "status": "DONE"},
+            headers=member.headers,
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        unchanged = client.get(f"{tasks_url}/{task['id']}", headers=member.headers)
+        assert unchanged.json()["status"] == "BACKLOG"
+
+    def test_hides_the_task_from_a_non_member(
+        self, client: TestClient, tasks_url: str, task: dict, outsider: Account
+    ) -> None:
+        response = client.patch(
+            f"{tasks_url}/{task['id']}",
+            json={"status": "DONE"},
+            headers=outsider.headers,
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_hides_the_activity_from_a_non_member(
+        self, client: TestClient, tasks_url: str, task: dict, outsider: Account
+    ) -> None:
+        response = client.get(f"{tasks_url}/{task['id']}/activity", headers=outsider.headers)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+class TestTaskActivity:
+    def test_records_creation(
+        self, client: TestClient, tasks_url: str, task: dict, member: Account
+    ) -> None:
+        events = activity(client, tasks_url, task["id"], member)
+
+        assert len(events) == 1
+        assert events[0]["type"] == "TASK_CREATED"
+        assert events[0]["data"] == {"status": "BACKLOG"}
+        assert events[0]["actor"]["id"] == member.id
+
+    def test_records_an_assignee_chosen_at_creation(
+        self, client: TestClient, tasks_url: str, member: Account, owner: Account
+    ) -> None:
+        created = client.post(
+            tasks_url,
+            json={"title": "Assigned", "assignee_id": owner.id},
+            headers=member.headers,
+        ).json()
+
+        events = activity(client, tasks_url, created["id"], member)
+        assert [event["type"] for event in events] == ["TASK_CREATED", "USER_ASSIGNED"]
+        assert events[1]["data"] == {"from": None, "to": owner.id}
