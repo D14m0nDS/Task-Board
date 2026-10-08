@@ -4,7 +4,9 @@ from app.api.deps import CurrentUser, DbSession, ProjectAccess, TaskAccess
 from app.models.activity import TaskActivity
 from app.models.task import Task
 from app.schemas.task import TaskActivityRead, TaskCreate, TaskRead, TaskUpdate
-from app.services import task_service
+from app.services import task_service, label_service
+from app.models.label import Label
+from app.schemas.label import LabelRead, TaskLabelsUpdate
 
 router = APIRouter(
     prefix="/workspaces/{workspace_id}/projects/{project_id}/tasks",
@@ -51,3 +53,14 @@ def update_task(
 @router.get("/{task_id}/activity", response_model=list[TaskActivityRead])
 def list_task_activity(db: DbSession, task: TaskAccess) -> list[TaskActivity]:
     return task_service.list_task_activity(db, task.id)
+
+
+@router.put("/{task_id}/labels", response_model=TaskRead)
+def set_task_labels(db: DbSession, task: TaskAccess, payload: TaskLabelsUpdate) -> Task:
+    try:
+        return label_service.set_task_labels(db, task, payload.label_ids)
+    except label_service.LabelNotOnProjectError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="One or more labels are not on this project",
+        ) from None

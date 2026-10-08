@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.activity import ActivitySource, ActivityType
 from app.models.task import TaskPriority, TaskStatus, TaskType
+from app.schemas.label import LabelRead
 from app.schemas.user import UserRead
 
 
@@ -64,4 +65,5 @@ class TaskRead(BaseModel):
     type: TaskType
     reporter: UserRead
     assignee: UserRead | None
+    labels: list[LabelRead]
     created_at: datetime

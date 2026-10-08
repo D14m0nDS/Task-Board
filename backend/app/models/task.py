@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.db.mixins import TimestampMixin
 from app.models.project import Project
 from app.models.user import User
+from app.models.label import Label, task_labels
 
 if TYPE_CHECKING:
     from app.models.activity import TaskActivity
@@ -77,6 +78,11 @@ class Task(Base, TimestampMixin):
     activities: Mapped[list["TaskActivity"]] = relationship(
         back_populates="task",
         cascade="all, delete-orphan",
+    )
+    labels: Mapped[list[Label]] = relationship(
+        secondary=task_labels,
+        back_populates="tasks",
+        order_by=Label.name,
     )
 
     @property

@@ -9,7 +9,9 @@ from app.api.deps import (
 )
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
-from app.services import project_service
+from app.schemas.label import LabelRead, LabelCreate
+from app.models.label import Label
+from app.services import project_service, label_service
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/projects", tags=["projects"])
 
@@ -40,3 +42,17 @@ def get_project(project: ProjectAccess) -> Project:
 @router.patch("/{project_id}", response_model=ProjectRead)
 def update_project(db: DbSession, project: ProjectOwnership, payload: ProjectUpdate) -> Project:
     return project_service.update_project(db, project, payload)
+
+@router.get("/{project_id}/labels", response_model=list[LabelRead])
+def list_labels(db: DbSession, project: ProjectAccess) -> list[Label]:
+    return label_service.list_labels(db, project.id)
+
+@router.post("/{project_id}/labels", response_model=LabelRead, status_code=status.HTTP_201_CREATED)
+def create_label(db: DbSession, project: ProjectAccess, payload: LabelCreate) -> Label:
+    try:
+        return label_service.create_label(db, project, payload)
+    except label_service.LabelNameTakenError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A label with this name already exists in the project",
+        ) from None
