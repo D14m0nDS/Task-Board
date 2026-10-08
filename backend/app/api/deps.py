@@ -10,9 +10,10 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
 from app.models.project import Project
+from app.models.task import Task
 from app.models.user import User
 from app.models.workspace import WorkspaceMember, WorkspaceRole
-from app.services import project_service, user_service, workspace_service
+from app.services import project_service, task_service, user_service, workspace_service
 
 # auto_error=False so a missing header reaches our code and produces a 401;
 # the default behaviour would return 403, which is misleading here.
@@ -148,3 +149,26 @@ def get_owned_workspace_project(
 
 
 ProjectOwnership = Annotated[Project, Depends(get_owned_workspace_project)]
+
+
+def get_project_task(
+    task_id: uuid.UUID,
+    db: DbSession,
+    project: ProjectAccess,
+) -> Task:
+    """The task named in the path, once the caller can see its project.
+
+    Filtering on the project id means a task from another project does not
+    resolve, even for someone who is a member of both.
+    """
+    task = task_service.get_task(db, project.id, task_id)
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    return task
+
+
+TaskAccess = Annotated[Task, Depends(get_project_task)]
